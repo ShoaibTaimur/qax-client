@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { InlineLoader } from "@/components/loading-screen";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -58,7 +59,7 @@ function DashboardPage() {
       </header>
 
       {stats.isLoading || !s ? (
-        <div className="font-mono text-xs text-muted-foreground">Loading…</div>
+        <InlineLoader />
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

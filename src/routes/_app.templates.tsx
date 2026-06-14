@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { InlineLoader } from "@/components/loading-screen";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
@@ -109,7 +110,7 @@ function TemplatesPage() {
       </header>
 
       {templates.isLoading ? (
-        <div className="font-mono text-xs text-muted-foreground">Loading…</div>
+        <InlineLoader />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {templates.data?.map((t) => (

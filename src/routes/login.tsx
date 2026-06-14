@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/api";
+import faviconAsset from "@/assets/favicon.png.asset.json";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -50,13 +51,16 @@ function LoginPage() {
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
+    <div className="grid min-h-screen lg:grid-cols-2 animate-fade-in">
+
       {/* Brand panel */}
       <div className="hidden flex-col justify-between bg-sidebar p-12 text-sidebar-foreground lg:flex">
         <div className="flex items-center gap-3">
-          <div className="grid h-9 w-9 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground font-mono font-bold">
-            Q
-          </div>
+          <img
+            src={faviconAsset.url}
+            alt="QAX"
+            className="h-9 w-9 rounded-md"
+          />
           <span className="font-mono text-sm uppercase tracking-[0.2em]">QAX</span>
         </div>
         <div className="space-y-6">
@@ -92,9 +96,11 @@ function LoginPage() {
       <div className="flex items-center justify-center bg-background p-6 sm:p-12">
         <form onSubmit={onSubmit} className="w-full max-w-sm space-y-6">
           <div className="lg:hidden flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-md bg-primary text-primary-foreground font-mono font-bold">
-              Q
-            </div>
+            <img
+              src={faviconAsset.url}
+              alt="QAX"
+              className="h-9 w-9 rounded-md"
+            />
             <span className="font-mono text-sm uppercase tracking-[0.2em]">QAX</span>
           </div>
           <div>
@@ -142,6 +148,17 @@ function LoginPage() {
 
           <p className="text-center font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
             QAX · Secure session
+          </p>
+          <p className="text-center text-xs text-muted-foreground/60">
+            Made by{" "}
+            <a
+              href="https://taimur.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground transition-colors"
+            >
+              Md Shoaib Taimur
+            </a>
           </p>
         </form>
       </div>

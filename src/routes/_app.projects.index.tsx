@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { InlineLoader } from "@/components/loading-screen";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
@@ -103,7 +104,7 @@ function ProjectsPage() {
       </header>
 
       {projects.isLoading ? (
-        <div className="font-mono text-xs text-muted-foreground">Loading…</div>
+        <InlineLoader />
       ) : projects.data && projects.data.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projects.data.map((p) => (

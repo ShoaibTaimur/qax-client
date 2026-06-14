@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { InlineLoader } from "@/components/loading-screen";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
@@ -30,7 +31,7 @@ function AuditLogPage() {
         <p className="mt-1 text-sm text-muted-foreground">Most recent 200 system actions.</p>
       </header>
       {logs.isLoading ? (
-        <div className="font-mono text-xs text-muted-foreground">Loading…</div>
+        <InlineLoader />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border bg-card">
           <table className="w-full text-sm">

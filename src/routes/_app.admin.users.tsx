@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { InlineLoader } from "@/components/loading-screen";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
@@ -84,7 +85,7 @@ function AdminUsersPage() {
       </header>
 
       {users.isLoading ? (
-        <div className="font-mono text-xs text-muted-foreground">Loading…</div>
+        <InlineLoader />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border bg-card">
           <table className="w-full text-sm">
