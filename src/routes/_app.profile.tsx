@@ -1,0 +1,214 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
+import { api, ApiError } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { ArrowLeft, KeyRound, Shield, User } from "lucide-react";
+
+export const Route = createFileRoute("/_app/profile")({
+  head: () => ({ meta: [{ title: "Profile — QAX" }] }),
+  component: ProfilePage,
+});
+
+function ProfilePage() {
+  const { user, refresh } = useAuth();
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+
+  const changePassword = useMutation({
+    mutationFn: () =>
+      api("/api/auth/change-password", {
+        method: "POST",
+        json: { currentPassword, newPassword },
+      }),
+    onSuccess: () => {
+      toast.success("Password changed");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      void refresh();
+    },
+    onError: (err: ApiError) => toast.error(err.message),
+  });
+
+  function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error("New password must be at least 8 characters");
+      return;
+    }
+    changePassword.mutate();
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-10">
+      <header className="mb-8">
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-3 w-3" /> Back to dashboard
+        </Link>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Profile</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Your account details and security settings.
+        </p>
+      </header>
+
+      <div className="space-y-6">
+        {/* Info card */}
+        <div className="rounded-lg border border-border bg-card p-5">
+          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            Account
+          </h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <InfoRow icon={User} label="Username" value={user?.username ?? "—"} />
+            <InfoRow
+              icon={Shield}
+              label="Role"
+              value={user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : "—"}
+            />
+            <InfoRow
+              icon={User}
+              label="Member since"
+              value={user?.createdAt ? fmtDate(user.createdAt) : "—"}
+            />
+            <InfoRow
+              icon={User}
+              label="Last login"
+              value={user?.lastLoginAt ? fmtDate(user.lastLoginAt) : "—"}
+            />
+          </div>
+        </div>
+
+        {/* Change password */}
+        <div className="rounded-lg border border-border bg-card p-5">
+          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            Security
+          </h2>
+          <form onSubmit={handleChangePassword} className="mt-4 max-w-md space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="current" className="font-mono text-[11px] uppercase tracking-wider">
+                Current password
+              </Label>
+              <div className="relative">
+                <Input
+                  id="current"
+                  type={showCurrent ? "text" : "password"}
+                  autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrent((s) => !s)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  {showCurrent ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new" className="font-mono text-[11px] uppercase tracking-wider">
+                New password
+              </Label>
+              <div className="relative">
+                <Input
+                  id="new"
+                  type={showNew ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNew((s) => !s)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  {showNew ? "Hide" : "Show"}
+                </button>
+              </div>
+              <p className="font-mono text-[10px] text-muted-foreground">
+                At least 8 characters with upper, lower, and digit.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirm" className="font-mono text-[11px] uppercase tracking-wider">
+                Confirm new password
+              </Label>
+              <Input
+                id="confirm"
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            <Button
+              type="submit"
+              disabled={changePassword.isPending}
+              className="gap-2"
+            >
+              <KeyRound className="h-4 w-4" />
+              {changePassword.isPending ? "Updating…" : "Change password"}
+            </Button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <Icon className="mt-0.5 h-4 w-4 text-muted-foreground" />
+      <div>
+        <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          {label}
+        </div>
+        <div className="mt-0.5 text-sm font-medium">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function fmtDate(d: string) {
+  try {
+    return new Date(d).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return d;
+  }
+}
