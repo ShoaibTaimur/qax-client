@@ -16,11 +16,11 @@ export function LoadingScreen({
       )}
     >
       <div className="relative">
-        <div className="absolute inset-0 animate-ping rounded-md bg-primary/30" />
+        <div className="absolute -inset-2 animate-ping rounded-lg bg-primary/25 dark:bg-primary/40" />
         <img
           src={faviconAsset.url}
           alt="QAX"
-          className="relative h-14 w-14 rounded-md shadow-lg"
+          className="relative h-14 w-14 rounded-md shadow-lg ring-1 ring-border dark:ring-primary/30 dark:shadow-primary/20"
         />
       </div>
       <div className="flex items-center gap-3">
