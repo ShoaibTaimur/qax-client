@@ -18,8 +18,14 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Default to light during SSR to match server render; sync on mount.
-  const [theme, setThemeState] = useState<Theme>("light");
+  // Read the theme already applied by the pre-hydration script (in __root.tsx)
+  // to avoid a light-mode flash before the effect runs.
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof document !== "undefined" && document.documentElement.classList.contains("dark")) {
+      return "dark";
+    }
+    return "light";
+  });
 
   useEffect(() => {
     const stored = (typeof window !== "undefined" && window.localStorage.getItem(STORAGE_KEY)) as Theme | null;
