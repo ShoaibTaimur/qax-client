@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import faviconAsset from "@/assets/favicon.png.asset.json";
+const faviconAsset = { url: "/favicon.png" };
 
 export function LoadingScreen({
   label = "Loading",

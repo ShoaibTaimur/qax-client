@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/api";
-import faviconAsset from "@/assets/favicon.png.asset.json";
+const faviconAsset = { url: "/favicon.png" };
 
 export const Route = createFileRoute("/login")({
   head: () => ({

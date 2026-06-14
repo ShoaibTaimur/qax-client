@@ -19,7 +19,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { LayoutDashboard, FolderKanban, Shield, LayoutTemplate, ScrollText, LogOut, Sun, Moon } from "lucide-react";
-import faviconAsset from "@/assets/favicon.png.asset.json";
+const faviconAsset = { url: "/favicon.png" };
 import { useTheme } from "@/lib/theme";
 
 export const Route = createFileRoute("/_app")({
