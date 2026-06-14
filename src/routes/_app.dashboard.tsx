@@ -1,8 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { InlineLoader } from "@/components/loading-screen";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   FolderKanban,
   ListChecks,
@@ -16,6 +24,28 @@ export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
 });
 
+type Execution = {
+  pass: number;
+  fail: number;
+  blocked: number;
+  skipped: number;
+  pending: number;
+  otherFilled: number;
+};
+
+type PerProject = {
+  id: string;
+  name: string;
+  status: string;
+  createdAt: string;
+  rowsTotal: number;
+  execution: Execution;
+  passRate: number;
+  bugsTotal: number;
+  openBugs: number;
+  criticalOpen: number;
+};
+
 type Stats = {
   projectsTotal: number;
   projectsActive: number;
@@ -23,17 +53,12 @@ type Stats = {
   bugsTotal: number;
   openBugs: number;
   criticalOpen: number;
-  execution: {
-    pass: number;
-    fail: number;
-    blocked: number;
-    skipped: number;
-    pending: number;
-    otherFilled: number;
-  };
+  execution: Execution;
   passRate: number;
   recentProjects: { id: string; name: string; status: string; createdAt: string }[];
+  perProject: PerProject[];
 };
+
 
 function DashboardPage() {
   const { user } = useAuth();
@@ -41,8 +66,35 @@ function DashboardPage() {
     queryKey: ["stats"],
     queryFn: () => api<Stats>("/api/stats"),
   });
+  const [selectedId, setSelectedId] = useState<string>("__all__");
 
   const s = stats.data;
+  const selected =
+    s && selectedId !== "__all__"
+      ? s.perProject.find((p) => p.id === selectedId) ?? null
+      : null;
+
+  const view = selected
+    ? {
+        label: selected.name,
+        execution: selected.execution,
+        passRate: selected.passRate,
+        rowsTotal: selected.rowsTotal,
+        bugsTotal: selected.bugsTotal,
+        openBugs: selected.openBugs,
+        criticalOpen: selected.criticalOpen,
+      }
+    : s
+      ? {
+          label: "All projects",
+          execution: s.execution,
+          passRate: s.passRate,
+          rowsTotal: s.rowsTotal,
+          bugsTotal: s.bugsTotal,
+          openBugs: s.openBugs,
+          criticalOpen: s.criticalOpen,
+        }
+      : null;
 
   return (
     <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-10">
@@ -58,36 +110,58 @@ function DashboardPage() {
         </p>
       </header>
 
-      {stats.isLoading || !s ? (
+      {stats.isLoading || !s || !view ? (
         <InlineLoader />
       ) : (
         <>
+          <div className="mb-6 flex flex-wrap items-center gap-3">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              View
+            </span>
+            <Select value={selectedId} onValueChange={setSelectedId}>
+              <SelectTrigger className="h-9 w-[260px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All projects</SelectItem>
+                {s.perProject.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              {view.label}
+            </span>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
-              label="Projects"
-              value={s.projectsTotal}
-              hint={`${s.projectsActive} active`}
+              label={selected ? "Project" : "Projects"}
+              value={selected ? 1 : s.projectsTotal}
+              hint={selected ? selected.status : `${s.projectsActive} active`}
               icon={FolderKanban}
             />
             <StatCard
               label="Test cases"
-              value={s.rowsTotal}
-              hint="across all projects"
+              value={view.rowsTotal}
+              hint={selected ? "in this project" : "across all projects"}
               icon={ListChecks}
             />
             <StatCard
               label="Open bugs"
-              value={s.openBugs}
-              hint={`${s.bugsTotal} total`}
+              value={view.openBugs}
+              hint={`${view.bugsTotal} total`}
               icon={BugIcon}
-              tone={s.openBugs > 0 ? "warning" : "default"}
+              tone={view.openBugs > 0 ? "warning" : "default"}
             />
             <StatCard
               label="Critical open"
-              value={s.criticalOpen}
+              value={view.criticalOpen}
               hint="high-severity"
               icon={AlertOctagon}
-              tone={s.criticalOpen > 0 ? "destructive" : "default"}
+              tone={view.criticalOpen > 0 ? "destructive" : "default"}
             />
           </div>
 
@@ -95,24 +169,24 @@ function DashboardPage() {
             <div className="rounded-lg border border-border bg-card p-5 lg:col-span-2">
               <div className="mb-4 flex items-baseline justify-between">
                 <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                  Execution
+                  Execution · {view.label}
                 </h2>
                 <div className="text-right">
                   <div className="text-3xl font-semibold tracking-tight">
-                    {Math.round(s.passRate * 100)}%
+                    {Math.round(view.passRate * 100)}%
                   </div>
                   <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                     Pass rate
                   </div>
                 </div>
               </div>
-              <PassRateBar exec={s.execution} />
+              <PassRateBar exec={view.execution} />
               <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-5">
-                <ExecStat label="Pass" value={s.execution.pass} dot="bg-success" />
-                <ExecStat label="Fail" value={s.execution.fail} dot="bg-destructive" />
-                <ExecStat label="Blocked" value={s.execution.blocked} dot="bg-warning" />
-                <ExecStat label="Skipped" value={s.execution.skipped} dot="bg-muted-foreground" />
-                <ExecStat label="Pending" value={s.execution.pending} dot="bg-info" />
+                <ExecStat label="Pass" value={view.execution.pass} dot="bg-success" />
+                <ExecStat label="Fail" value={view.execution.fail} dot="bg-destructive" />
+                <ExecStat label="Blocked" value={view.execution.blocked} dot="bg-warning" />
+                <ExecStat label="Skipped" value={view.execution.skipped} dot="bg-muted-foreground" />
+                <ExecStat label="Pending" value={view.execution.pending} dot="bg-info" />
               </div>
             </div>
 
@@ -152,6 +226,55 @@ function DashboardPage() {
               )}
             </div>
           </div>
+
+          {!selected && s.perProject.length > 0 && (
+            <div className="mt-8 rounded-lg border border-border bg-card p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  Per-project breakdown
+                </h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <th className="py-2 pr-3">Project</th>
+                      <th className="px-3 py-2 text-right">Cases</th>
+                      <th className="px-3 py-2 text-right">Pass</th>
+                      <th className="px-3 py-2 text-right">Fail</th>
+                      <th className="px-3 py-2 text-right">Blocked</th>
+                      <th className="px-3 py-2 text-right">Skipped</th>
+                      <th className="px-3 py-2 text-right">Pending</th>
+                      <th className="px-3 py-2 text-right">Open bugs</th>
+                      <th className="px-3 py-2 text-right">Pass rate</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {s.perProject.map((p) => (
+                      <tr key={p.id} className="hover:bg-accent/30">
+                        <td className="py-2 pr-3">
+                          <button
+                            onClick={() => setSelectedId(p.id)}
+                            className="truncate text-left hover:text-primary"
+                          >
+                            {p.name}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono">{p.rowsTotal}</td>
+                        <td className="px-3 py-2 text-right font-mono text-success">{p.execution.pass}</td>
+                        <td className="px-3 py-2 text-right font-mono text-destructive">{p.execution.fail}</td>
+                        <td className="px-3 py-2 text-right font-mono text-warning">{p.execution.blocked}</td>
+                        <td className="px-3 py-2 text-right font-mono">{p.execution.skipped}</td>
+                        <td className="px-3 py-2 text-right font-mono text-info">{p.execution.pending}</td>
+                        <td className="px-3 py-2 text-right font-mono">{p.openBugs}</td>
+                        <td className="px-3 py-2 text-right font-mono">{Math.round(p.passRate * 100)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

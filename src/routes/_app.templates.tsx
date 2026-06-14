@@ -60,8 +60,10 @@ type Template = {
   description: string;
   builtIn: boolean;
   ownerId?: string | null;
+  defaultRows?: number;
   columns: TemplateColumn[];
 };
+
 
 function TemplatesPage() {
   const qc = useQueryClient();
@@ -154,6 +156,12 @@ function TemplatesPage() {
                   </span>
                 ))}
               </div>
+              {(t.defaultRows ?? 0) > 0 && (
+                <p className="mt-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Seeds {t.defaultRows} row{t.defaultRows === 1 ? "" : "s"} on use
+                </p>
+              )}
+
             </div>
           ))}
         </div>
@@ -165,17 +173,20 @@ function TemplatesPage() {
 function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [defaultRows, setDefaultRows] = useState<string>("");
   const [columns, setColumns] = useState<TemplateColumn[]>([
     { label: "Title", type: "text" },
   ]);
 
   const create = useMutation({
-    mutationFn: () =>
-      api<Template>("/api/templates", {
+    mutationFn: () => {
+      const n = parseInt(defaultRows, 10);
+      return api<Template>("/api/templates", {
         method: "POST",
         json: {
           name: name.trim(),
           description: description.trim(),
+          defaultRows: Number.isFinite(n) && n > 0 ? n : 0,
           columns: columns
             .filter((c) => c.label.trim())
             .map((c) => ({
@@ -187,16 +198,19 @@ function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
                   : undefined,
             })),
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Template created");
       setName("");
       setDescription("");
+      setDefaultRows("");
       setColumns([{ label: "Title", type: "text" }]);
       onCreated();
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
 
   const updateCol = (i: number, patch: Partial<TemplateColumn>) =>
     setColumns((cs) => cs.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
@@ -235,6 +249,22 @@ function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
             rows={2}
           />
         </div>
+        <div className="grid gap-2">
+          <Label htmlFor="tpl-rows">Default rows to allocate</Label>
+          <Input
+            id="tpl-rows"
+            type="number"
+            min={0}
+            max={1000}
+            value={defaultRows}
+            onChange={(e) => setDefaultRows(e.target.value)}
+            placeholder="e.g. 10 — leave blank for none"
+          />
+          <p className="text-xs text-muted-foreground">
+            Projects created from this template will start with this many empty rows.
+          </p>
+        </div>
+
 
         <div className="grid gap-2">
           <div className="flex items-center justify-between">

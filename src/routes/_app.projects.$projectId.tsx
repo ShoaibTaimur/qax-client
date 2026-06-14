@@ -28,6 +28,7 @@ import {
   ArrowLeft,
   Plus,
   Trash2,
+  Pencil,
   FileSpreadsheet,
   FileText,
   Bug as BugIcon,
@@ -38,6 +39,7 @@ import {
   Image as ImageIcon,
   File as FileIcon,
   Film,
+
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -280,9 +282,24 @@ function TableView({ projectId }: { projectId: string }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["columns", projectId] });
       qc.invalidateQueries({ queryKey: ["rows", projectId] });
+      toast.success("Column deleted");
     },
     onError: (e: ApiError) => toast.error(e.message),
   });
+
+  const renameColumn = useMutation({
+    mutationFn: ({ id, label }: { id: string; label: string }) =>
+      api(`/api/projects/${projectId}/columns/${id}`, {
+        method: "PATCH",
+        json: { label },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["columns", projectId] });
+      toast.success("Column renamed");
+    },
+    onError: (e: ApiError) => toast.error(e.message),
+  });
+
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const toggleSelected = (id: string) => {
@@ -379,15 +396,32 @@ function TableView({ projectId }: { projectId: string }) {
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-foreground">{c.label}</span>
                       <span className="text-[10px] text-muted-foreground">{c.type}</span>
-                      <button
-                        onClick={() => {
-                          if (confirm(`Delete column "${c.label}"?`)) deleteColumn.mutate(c.id);
-                        }}
-                        className="opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <button
+                          onClick={() => {
+                            const next = prompt(`Rename column "${c.label}"`, c.label);
+                            const trimmed = next?.trim();
+                            if (trimmed && trimmed !== c.label) {
+                              renameColumn.mutate({ id: c.id, label: trimmed });
+                            }
+                          }}
+                          className="hover:text-primary"
+                          title="Rename column"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Delete column "${c.label}"?`)) deleteColumn.mutate(c.id);
+                          }}
+                          className="hover:text-destructive"
+                          title="Delete column"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
+
                   </th>
                 ))}
                 <th className="border-b border-border bg-muted px-3 py-2"></th>
@@ -606,26 +640,33 @@ function AddColumnDialog({
   const [label, setLabel] = useState("");
   const [type, setType] = useState<ColumnType>("text");
   const [optionsText, setOptionsText] = useState("");
+  const [initialRows, setInitialRows] = useState<string>("");
 
   const create = useMutation({
-    mutationFn: () =>
-      api<Column>(`/api/projects/${projectId}/columns`, {
+    mutationFn: () => {
+      const n = parseInt(initialRows, 10);
+      return api<Column>(`/api/projects/${projectId}/columns`, {
         method: "POST",
         json: {
           label,
           type,
-          options: type === "dropdown"
-            ? optionsText.split(",").map((s) => s.trim()).filter(Boolean)
-            : undefined,
+          options:
+            type === "dropdown"
+              ? optionsText.split(",").map((s) => s.trim()).filter(Boolean)
+              : undefined,
+          initialRows: Number.isFinite(n) && n > 0 ? n : undefined,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["columns", projectId] });
+      qc.invalidateQueries({ queryKey: ["rows", projectId] });
       toast.success("Column added");
       onClose();
       setLabel("");
       setOptionsText("");
       setType("text");
+      setInitialRows("");
     },
     onError: (e: ApiError) => toast.error(e.message),
   });
@@ -668,6 +709,20 @@ function AddColumnDialog({
             />
           </div>
         )}
+        <div className="space-y-2">
+          <Label>Rows to allocate</Label>
+          <Input
+            type="number"
+            min={0}
+            max={1000}
+            value={initialRows}
+            onChange={(e) => setInitialRows(e.target.value)}
+            placeholder="e.g. 10 — leave blank for none"
+          />
+          <p className="text-xs text-muted-foreground">
+            Ensures the table has at least this many rows. Existing rows are kept.
+          </p>
+        </div>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={create.isPending}>
@@ -678,6 +733,7 @@ function AddColumnDialog({
     </DialogContent>
   );
 }
+
 
 /* ----------------------------- Bugs view ----------------------------- */
 
