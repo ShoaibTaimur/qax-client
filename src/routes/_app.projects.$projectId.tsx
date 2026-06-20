@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { api, ApiError, downloadUrl, getToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -747,6 +747,7 @@ function BugsView({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Bug | null>(null);
+  const [viewing, setViewing] = useState<Bug | null>(null);
   const [search, setSearch] = useState("");
   const [fSeverity, setFSeverity] = useState<string>("all");
   const [fPriority, setFPriority] = useState<string>("all");
@@ -829,6 +830,26 @@ function BugsView({ projectId }: { projectId: string }) {
             }}
           />
         </Dialog>
+
+        <Dialog open={viewing !== null} onOpenChange={(o) => !o && setViewing(null)}>
+          {viewing && (
+            <BugViewDialog
+              bug={viewing}
+              onClose={() => setViewing(null)}
+              onEdit={() => {
+                const b = viewing;
+                setViewing(null);
+                setEditing(b);
+              }}
+              onDelete={() => {
+                if (confirm(`Delete ${viewing.bugId}?`)) {
+                  del.mutate(viewing.id);
+                  setViewing(null);
+                }
+              }}
+            />
+          )}
+        </Dialog>
       </div>
 
       {bugs.isLoading ? (
@@ -900,7 +921,7 @@ function BugsView({ projectId }: { projectId: string }) {
                   <tr
                     key={b.id}
                     className="cursor-pointer border-b border-border last:border-0 hover:bg-accent/30"
-                    onClick={() => setEditing(b)}
+                    onClick={() => setViewing(b)}
                   >
                     <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{b.bugId}</td>
                     <td className="px-3 py-2 font-medium">{b.title}</td>
@@ -1098,6 +1119,145 @@ function BugDialog({
     </DialogContent>
   );
 }
+
+function BugViewDialog({
+  bug,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  bug: Bug;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [preview, setPreview] = useState<Attachment | null>(null);
+  return (
+    <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <span className="font-mono text-xs text-muted-foreground">{bug.bugId}</span>
+          <span className="truncate">{bug.title}</span>
+        </DialogTitle>
+      </DialogHeader>
+
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <span className={cn("inline-flex rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider", statusClass(bug.severity))}>
+            Severity: {bug.severity}
+          </span>
+          <span className={cn("inline-flex rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider", statusClass(bug.priority))}>
+            Priority: {bug.priority}
+          </span>
+          <span className={cn("inline-flex rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider", statusClass(bug.status))}>
+            Status: {bug.status}
+          </span>
+          <span className="inline-flex rounded border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            {new Date(bug.createdAt).toISOString().slice(0, 10)}
+          </span>
+        </div>
+
+        {bug.description && (
+          <Section label="Description">{bug.description}</Section>
+        )}
+        {bug.stepsToReproduce && (
+          <Section label="Steps to reproduce">{bug.stepsToReproduce}</Section>
+        )}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {bug.expectedResult && (
+            <Section label="Expected result">{bug.expectedResult}</Section>
+          )}
+          {bug.actualResult && (
+            <Section label="Actual result">{bug.actualResult}</Section>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
+            <Paperclip className="h-3.5 w-3.5" /> Attachments ({bug.attachments?.length ?? 0})
+          </Label>
+          {bug.attachments && bug.attachments.length > 0 ? (
+            <ul className="divide-y divide-border rounded-md border border-border">
+              {bug.attachments.map((a) => (
+                <li key={a.id} className="flex items-center gap-3 px-3 py-2">
+                  <span className="text-muted-foreground"><AttachmentIcon a={a} /></span>
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {a.fileName || a.secureUrl?.split("/").pop() || "Attachment"}
+                  </span>
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {a.fileSize ? formatBytes(a.fileSize) : ""}
+                  </span>
+                  {a.secureUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setPreview(a)}
+                      className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-mono uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> View
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs font-mono text-muted-foreground">
+              No attachments
+            </div>
+          )}
+        </div>
+      </div>
+
+      <DialogFooter className="flex-row justify-between sm:justify-between">
+        <Button type="button" variant="destructive" onClick={onDelete}>
+          <Trash2 className="mr-2 h-4 w-4" /> Delete
+        </Button>
+        <div className="flex gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>Close</Button>
+          <Button type="button" onClick={onEdit}>Edit</Button>
+        </div>
+      </DialogFooter>
+
+      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
+        <DialogContent className="max-w-4xl p-0 overflow-hidden">
+          <DialogHeader className="border-b border-border px-4 py-3">
+            <DialogTitle className="flex items-center gap-2 text-sm">
+              {preview && <AttachmentIcon a={preview} />}
+              <span className="truncate">{preview?.fileName || "Attachment"}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex max-h-[75vh] items-center justify-center overflow-auto bg-black/80 p-4 animate-in zoom-in-95 duration-200">
+            {preview?.resourceType === "image" && (
+              <img src={preview.secureUrl} alt={preview.fileName} className="max-h-[70vh] max-w-full rounded object-contain shadow-2xl" />
+            )}
+            {preview?.resourceType === "video" && (
+              <video src={preview.secureUrl} controls autoPlay className="max-h-[70vh] max-w-full rounded shadow-2xl" />
+            )}
+            {preview?.resourceType === "raw" && (
+              <iframe src={preview.secureUrl} title={preview.fileName} className="h-[70vh] w-full rounded bg-white" />
+            )}
+          </div>
+          <DialogFooter className="border-t border-border px-4 py-2">
+            <a href={preview?.secureUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground">
+              Open in new tab
+            </a>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </DialogContent>
+  );
+}
+
+function Section({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+      <div className="whitespace-pre-wrap rounded-md border border-border bg-card/40 px-3 py-2 text-sm">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 
 /* ----------------------------- Attachments ---------------------------- */
 
