@@ -36,6 +36,7 @@ import {
   Paperclip,
   Upload,
   X,
+  Eye,
   Image as ImageIcon,
   File as FileIcon,
   Film,
@@ -1128,6 +1129,7 @@ function AttachmentsField({
   onChange: (next: Attachment[]) => void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<Attachment | null>(null);
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -1201,17 +1203,22 @@ function AttachmentsField({
           {attachments.map((a) => (
             <li key={a.id} className="flex items-center gap-3 px-3 py-2">
               <span className="text-muted-foreground"><AttachmentIcon a={a} /></span>
-              <a
-                href={a.secureUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="min-w-0 flex-1 truncate text-sm hover:underline"
-              >
-                {a.fileName || a.secureUrl.split("/").pop()}
-              </a>
-              <span className="font-mono text-[10px] text-muted-foreground">
-                {formatBytes(a.fileSize)}
+              <span className="min-w-0 flex-1 truncate text-sm">
+                {a.fileName || a.secureUrl?.split("/").pop() || "Attachment"}
               </span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {a.fileSize ? formatBytes(a.fileSize) : ""}
+              </span>
+              {a.secureUrl && (
+                <button
+                  type="button"
+                  onClick={() => setPreview(a)}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-mono uppercase tracking-wider text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                  aria-label="View attachment"
+                >
+                  <Eye className="h-3.5 w-3.5" /> View
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onChange(attachments.filter((x) => x.id !== a.id))}
@@ -1244,6 +1251,52 @@ function AttachmentsField({
           accept="image/*,video/*,application/pdf"
         />
       </label>
+
+      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
+        <DialogContent className="max-w-4xl p-0 overflow-hidden">
+          <DialogHeader className="border-b border-border px-4 py-3">
+            <DialogTitle className="flex items-center gap-2 text-sm">
+              {preview && <AttachmentIcon a={preview} />}
+              <span className="truncate">{preview?.fileName || "Attachment"}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex max-h-[75vh] items-center justify-center overflow-auto bg-black/80 p-4 animate-in zoom-in-95 duration-200">
+            {preview?.resourceType === "image" && (
+              <img
+                src={preview.secureUrl}
+                alt={preview.fileName}
+                className="max-h-[70vh] max-w-full rounded object-contain shadow-2xl"
+              />
+            )}
+            {preview?.resourceType === "video" && (
+              <video
+                src={preview.secureUrl}
+                controls
+                autoPlay
+                className="max-h-[70vh] max-w-full rounded shadow-2xl"
+              />
+            )}
+            {preview?.resourceType === "raw" && (
+              <iframe
+                src={preview.secureUrl}
+                title={preview.fileName}
+                className="h-[70vh] w-full rounded bg-white"
+              />
+            )}
+          </div>
+          <DialogFooter className="border-t border-border px-4 py-2">
+            <a
+              href={preview?.secureUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground"
+            >
+              Open in new tab
+            </a>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+

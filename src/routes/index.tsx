@@ -1,5 +1,6 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
+import { LoadingScreen } from "@/components/loading-screen";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -14,13 +15,7 @@ export const Route = createFileRoute("/")({
 function IndexRedirect() {
   const { user, loading } = useAuth();
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-          Initializing
-        </div>
-      </div>
-    );
+    return <LoadingScreen label="Authenticating" />;
   }
   return <Navigate to={user ? "/dashboard" : "/login"} />;
 }
