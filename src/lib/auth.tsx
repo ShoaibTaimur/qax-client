@@ -1,4 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import {
   api,
   getStoredAccounts,
@@ -51,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [accounts, setAccounts] = useState<AccountEntry[]>([]);
   const [switching, setSwitching] = useState<AuthUser | null>(null);
+  const queryClient = useQueryClient();
+  const router = useRouter();
 
   const syncAccounts = useCallback(() => {
     setAccounts(getStoredAccounts<AuthUser>());
@@ -137,15 +141,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const reordered = [entry, ...list.filter((a) => a.user.id !== userId)];
       persistAccounts(reordered);
       setAccounts(reordered);
+      // Drop all cached data from the previous account so the new account's
+      // data is fetched fresh instead of showing the prior user's data.
+      await queryClient.cancelQueries();
+      await queryClient.resetQueries();
       try {
         await refresh();
+        await router.invalidate();
       } finally {
         // Hold a beat so the "done" state can play through smoothly
         await new Promise((r) => setTimeout(r, 1200));
         setSwitching(null);
       }
     },
-    [refresh, user?.id],
+    [refresh, user?.id, queryClient, router],
   );
 
   const removeAccount = useCallback(
@@ -156,12 +165,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccounts(remaining);
       // If we removed the active account, switch to another or sign out
       if (user?.id === userId) {
+        void queryClient.cancelQueries();
+        void queryClient.resetQueries();
         if (remaining.length > 0) {
           const next = remaining[0];
           setToken(next.token);
           setStoredUser(next.user);
           setUserState(next.user);
           void refresh();
+          void router.invalidate();
         } else {
           setToken(null);
           setStoredUser(null);
@@ -169,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [user, refresh],
+    [user, refresh, queryClient, router],
   );
 
   const logout = useCallback(async () => {
@@ -183,18 +195,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const remaining = getStoredAccounts<AuthUser>().filter((a) => a.user.id !== currentId);
     persistAccounts(remaining);
     setAccounts(remaining);
+    await queryClient.cancelQueries();
+    await queryClient.resetQueries();
     if (remaining.length > 0) {
       const next = remaining[0];
       setToken(next.token);
       setStoredUser(next.user);
       setUserState(next.user);
       void refresh();
+      void router.invalidate();
     } else {
       setToken(null);
       setStoredUser(null);
       setUserState(null);
     }
-  }, [user, refresh]);
+  }, [user, refresh, queryClient, router]);
 
   const setUser = useCallback((u: AuthUser) => {
     setUserState(u);
