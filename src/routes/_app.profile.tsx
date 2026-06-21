@@ -1,13 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { useAuth } from "@/lib/auth";
+import { useAuth, type AuthUser } from "@/lib/auth";
 import { api, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { ArrowLeft, KeyRound, Shield, User } from "lucide-react";
+import { ArrowLeft, Camera, KeyRound, Loader2, Shield, Trash2, User } from "lucide-react";
 
 export const Route = createFileRoute("/_app/profile")({
   head: () => ({ meta: [{ title: "Profile — QAX" }] }),
@@ -15,13 +16,17 @@ export const Route = createFileRoute("/_app/profile")({
 });
 
 function ProfilePage() {
-  const { user, refresh } = useAuth();
+  const { user, refresh, setUser } = useAuth();
+  const navigate = useNavigate();
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
+
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const changePassword = useMutation({
     mutationFn: () =>
@@ -52,15 +57,87 @@ function ProfilePage() {
     changePassword.mutate();
   }
 
+  async function uploadAvatar(file: File) {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be under 5 MB");
+      return;
+    }
+    setUploadingAvatar(true);
+    try {
+      const sign = await api<{
+        timestamp: number;
+        signature: string;
+        folder: string;
+        apiKey: string;
+        cloudName: string;
+      }>("/api/attachments/sign", {
+        method: "POST",
+        json: { resourceType: "image" },
+      });
+
+      const form = new FormData();
+      form.append("file", file);
+      form.append("api_key", sign.apiKey);
+      form.append("timestamp", String(sign.timestamp));
+      form.append("signature", sign.signature);
+      form.append("folder", sign.folder);
+
+      const cloudUrl = `https://api.cloudinary.com/v1_1/${sign.cloudName}/image/upload`;
+      const res = await fetch(cloudUrl, { method: "POST", body: form });
+      if (!res.ok) throw new Error("Cloudinary upload failed");
+      const cld = (await res.json()) as { secure_url: string };
+
+      const updated = await api<AuthUser>("/api/auth/me", {
+        method: "PATCH",
+        json: { avatarUrl: cld.secure_url },
+      });
+      setUser(updated);
+      toast.success("Profile picture updated");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploadingAvatar(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function removeAvatar() {
+    setUploadingAvatar(true);
+    try {
+      const updated = await api<AuthUser>("/api/auth/me", {
+        method: "PATCH",
+        json: { avatarUrl: null },
+      });
+      setUser(updated);
+      toast.success("Profile picture removed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
+  const initials =
+    user?.username
+      ?.split(/[\s._-]+/)
+      .map((s) => s.charAt(0).toUpperCase())
+      .slice(0, 2)
+      .join("") ?? "U";
+
   return (
     <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-10">
       <header className="mb-8">
-        <Link
-          to="/dashboard"
+        <button
+          type="button"
+          onClick={() => navigate({ to: "/dashboard" })}
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3 w-3" /> Back to dashboard
-        </Link>
+        </button>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">Profile</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Your account details and security settings.
@@ -68,6 +145,69 @@ function ProfilePage() {
       </header>
 
       <div className="space-y-6">
+        {/* Avatar card */}
+        <div className="rounded-lg border border-border bg-card p-5">
+          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            Profile picture
+          </h2>
+          <div className="mt-5 flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+            <div className="relative">
+              <Avatar className="h-24 w-24 ring-2 ring-border">
+                {user?.avatarUrl ? (
+                  <AvatarImage src={user.avatarUrl} alt={user.username} />
+                ) : null}
+                <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 font-mono text-2xl">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              {uploadingAvatar && (
+                <div className="absolute inset-0 grid place-items-center rounded-full bg-background/70 backdrop-blur-sm">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              )}
+            </div>
+            <div className="flex-1 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Upload a square image — at least 128×128 px. PNG or JPG, max 5 MB.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="gap-2"
+                  disabled={uploadingAvatar}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <Camera className="h-4 w-4" />
+                  {user?.avatarUrl ? "Change picture" : "Upload picture"}
+                </Button>
+                {user?.avatarUrl && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-2"
+                    disabled={uploadingAvatar}
+                    onClick={removeAvatar}
+                  >
+                    <Trash2 className="h-4 w-4" /> Remove
+                  </Button>
+                )}
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void uploadAvatar(f);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Info card */}
         <div className="rounded-lg border border-border bg-card p-5">
           <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">

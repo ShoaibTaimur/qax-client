@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { LoadingScreen } from "@/components/loading-screen";
-import { useAuth } from "@/lib/auth";
+import { useAuth, type AccountEntry, type AuthUser } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -18,9 +18,34 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, FolderKanban, Shield, LayoutTemplate, ScrollText, LogOut, Sun, Moon } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  LayoutDashboard,
+  FolderKanban,
+  Shield,
+  LayoutTemplate,
+  ScrollText,
+  LogOut,
+  Sun,
+  Moon,
+  Check,
+  UserPlus,
+  UserRound,
+  X,
+  ChevronsUpDown,
+} from "lucide-react";
 const faviconAsset = { url: "/favicon.png" };
 import { useTheme } from "@/lib/theme";
+import { cn } from "@/lib/utils";
+import { AccountSwitchOverlay } from "@/components/account-switch-overlay";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -47,6 +72,7 @@ function AppLayout() {
   return (
     <SidebarProvider>
       <NavigationProgress />
+      <AccountSwitchOverlay />
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <SidebarInset className="min-w-0 flex-1">
@@ -62,6 +88,7 @@ function AppLayout() {
             </div>
             <div className="ml-auto flex items-center gap-1">
               <ThemeToggle />
+              <AccountSwitcher />
             </div>
           </header>
           <div key={location.pathname} className="min-w-0 animate-fade-in">
@@ -79,6 +106,185 @@ function NavigationProgress() {
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] h-[2px] overflow-hidden bg-transparent">
       <div className="h-full w-1/3 animate-[qax-progress_1.1s_ease-in-out_infinite] bg-primary" />
+    </div>
+  );
+}
+
+function userInitials(name?: string) {
+  if (!name) return "U";
+  return (
+    name
+      .split(/[\s._-]+/)
+      .map((s) => s.charAt(0).toUpperCase())
+      .slice(0, 2)
+      .join("") || "U"
+  );
+}
+
+function UserAvatar({
+  user,
+  className,
+}: {
+  user: Pick<AuthUser, "username" | "avatarUrl">;
+  className?: string;
+}) {
+  return (
+    <Avatar className={cn("h-8 w-8", className)}>
+      {user.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={user.username} /> : null}
+      <AvatarFallback className="bg-gradient-to-br from-primary/40 to-primary/10 font-mono text-[11px] font-semibold">
+        {userInitials(user.username)}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
+function AccountSwitcher() {
+  const { user, accounts, switchAccount, removeAccount, logout } = useAuth();
+  const navigate = useNavigate();
+  if (!user) return null;
+
+  const others = accounts.filter((a) => a.user.id !== user.id);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="group flex items-center gap-2 rounded-full border border-transparent px-1 py-0.5 transition-all hover:border-border hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Account menu"
+        >
+          <UserAvatar
+            user={user}
+            className="h-8 w-8 ring-2 ring-background transition-transform group-hover:scale-105"
+          />
+          <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        sideOffset={10}
+        className="w-72 overflow-hidden p-0"
+      >
+        {/* Current account header */}
+        <div className="relative overflow-hidden bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-4">
+          <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_top_right,hsl(var(--primary)/0.25),transparent_60%)]" />
+          <div className="relative flex items-center gap-3">
+            <UserAvatar user={user} className="h-12 w-12 ring-2 ring-primary/40" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">{user.username}</div>
+              <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-primary">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+                Active · {user.role}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {others.length > 0 && (
+          <>
+            <DropdownMenuLabel className="px-3 pt-3 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              Switch account
+            </DropdownMenuLabel>
+            <div className="space-y-0.5 px-1 pb-1">
+              {others.map((acc, i) => (
+                <AccountRow
+                  key={acc.user.id}
+                  acc={acc}
+                  index={i}
+                  onSwitch={() => void switchAccount(acc.user.id)}
+                  onRemove={() => removeAccount(acc.user.id)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem
+          className="cursor-pointer gap-2 px-3 py-2"
+          onSelect={() => navigate({ to: "/login", search: { add: 1 } as never })}
+        >
+          <div className="grid h-7 w-7 place-items-center rounded-full border border-dashed border-border bg-muted/40">
+            <UserPlus className="h-3.5 w-3.5" />
+          </div>
+          <span className="text-sm">Add another account</span>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem
+          className="cursor-pointer gap-2 px-3 py-2"
+          onSelect={() => navigate({ to: "/profile" })}
+        >
+          <div className="grid h-7 w-7 place-items-center rounded-full bg-muted/40">
+            <UserRound className="h-3.5 w-3.5" />
+          </div>
+          <span className="text-sm">Profile settings</span>
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem
+          className="cursor-pointer gap-2 px-3 py-2 text-destructive focus:text-destructive"
+          onSelect={async () => {
+            await logout();
+            navigate({ to: "/login" });
+          }}
+        >
+          <div className="grid h-7 w-7 place-items-center rounded-full bg-destructive/10 text-destructive">
+            <LogOut className="h-3.5 w-3.5" />
+          </div>
+          <span className="text-sm">Sign out{others.length > 0 ? " of this account" : ""}</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function AccountRow({
+  acc,
+  index,
+  onSwitch,
+  onRemove,
+}: {
+  acc: AccountEntry;
+  index: number;
+  onSwitch: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      className="group/row flex items-center gap-2 rounded-md px-2 py-1.5 opacity-0 animate-fade-in transition-colors hover:bg-accent/70"
+      style={{ animationDelay: `${index * 50}ms`, animationFillMode: "forwards" }}
+    >
+      <button
+        type="button"
+        onClick={onSwitch}
+        className="flex flex-1 items-center gap-3 text-left"
+      >
+        <UserAvatar
+          user={acc.user}
+          className="h-9 w-9 transition-transform group-hover/row:scale-110"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{acc.user.username}</div>
+          <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            {acc.user.role}
+          </div>
+        </div>
+        <Check className="h-4 w-4 -translate-x-2 opacity-0 text-primary transition-all group-hover/row:translate-x-0 group-hover/row:opacity-100" />
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/row:opacity-100"
+        aria-label={`Remove ${acc.user.username}`}
+        title="Remove from this device"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
@@ -148,20 +354,19 @@ function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border">
         <Link
           to="/profile"
-          className="block rounded-md px-2 py-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+          className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
         >
+          {user && (
+            <UserAvatar
+              user={user}
+              className={collapsed ? "h-8 w-8 mx-auto" : "h-8 w-8"}
+            />
+          )}
           {!collapsed && (
-            <div>
+            <div className="min-w-0">
+              <div className="truncate text-sm text-sidebar-foreground">{user?.username}</div>
               <div className="font-mono text-[10px] uppercase tracking-widest text-sidebar-foreground/50">
                 {user?.role}
-              </div>
-              <div className="truncate text-sm text-sidebar-foreground">{user?.username}</div>
-            </div>
-          )}
-          {collapsed && (
-            <div className="flex justify-center">
-              <div className="grid h-8 w-8 place-items-center rounded-full bg-sidebar-accent text-sidebar-accent-foreground font-mono text-xs font-bold">
-                {user?.username?.charAt(0)?.toUpperCase() ?? "U"}
               </div>
             </div>
           )}

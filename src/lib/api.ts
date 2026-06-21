@@ -1,10 +1,17 @@
 // Lightweight typed API client for the QAX Express backend.
 // Reads token from localStorage on the client; SSR-safe.
+// Supports multiple signed-in accounts with instant switching.
 
 const BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") || "";
 
 const TOKEN_KEY = "qax_token";
 const USER_KEY = "qax_user";
+const ACCOUNTS_KEY = "qax_accounts";
+
+export type StoredAccount<U = unknown> = {
+  token: string;
+  user: U;
+};
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -32,6 +39,24 @@ export function setStoredUser(user: unknown | null) {
   if (typeof window === "undefined") return;
   if (user) window.localStorage.setItem(USER_KEY, JSON.stringify(user));
   else window.localStorage.removeItem(USER_KEY);
+}
+
+export function getStoredAccounts<U = { id: string }>(): StoredAccount<U>[] {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(ACCOUNTS_KEY);
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? (arr as StoredAccount<U>[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setStoredAccounts(accounts: StoredAccount[]) {
+  if (typeof window === "undefined") return;
+  if (accounts.length === 0) window.localStorage.removeItem(ACCOUNTS_KEY);
+  else window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
 }
 
 export class ApiError extends Error {
@@ -73,7 +98,6 @@ export async function api<T = unknown>(
       (isJson && payload && typeof payload === "object" && "error" in payload
         ? String((payload as { error: unknown }).error)
         : null) || res.statusText || "Request failed";
-    // Surface Zod field-level validation errors so users see what's wrong.
     if (
       isJson &&
       payload &&
